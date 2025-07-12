@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html id="htmlEditor">
+<head id="headEditor">
+  <meta charset="utf-8" id="metaCharset">
+  <title id="titleEditor">Map Editor</title>
+  <style id="styleEditor">
+    /* Global */
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #1e1e1e;
+      color: #ccc;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #toolbar {
+      margin-bottom: 15px;
+      display: flex;
+      gap: 10px;
+      background-color: #2e2e2e;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    }
+    button {
+      background-color: #3e3e3e;
+      color: #ddd;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button:hover { background-color: #505050; }
+    button.active { background-color: #6070a0; color: #fff; }
+    #exportBtn { background-color: #4a7bc1; }
+    #exportBtn:hover { background-color: #5c8dd3; }
+    #renderBtn { background-color: #6fa06f; }
+    #renderBtn:hover { background-color: #7fcf7f; }
+    #undoBtn { background-color: #b0781e; }
+    #undoBtn:hover { background-color: #d08c35; }
+    #grid { border-collapse: collapse; user-select: none; }
+    #grid td {
+      width: 16px; height: 16px;
+      border: 1px solid #333;
+      cursor: pointer;
+      position: relative;
+    }
+    .walkable { background: #2a2a2a; }
+    .wall     { background: #555; }
+    .redBase  { background: #8b0000; color: #fff; }
+    .blueBase { background: #00008b; color: #fff; }
+    .particle {
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      animation: particle 0.6s ease-out forwards;
+      pointer-events: none;
+    }
+    @keyframes particle {
+      to { opacity: 0; transform: translate(-50%, -50%) scale(3); }
+    }
+    #exportOutput {
+      margin-top: 15px;
+      width: 640px; height: 120px;
+      background-color: #2e2e2e;
+      color: #ccc;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 8px;
+      font-family: monospace;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body id="bodyEditor">
+  <div id="toolbar">
+    <button id="tileWallBtn">Wall</button>
+    <button id="tileWalkableBtn">Walkable</button>
+    <button id="tileRedBtn">Red Base</button>
+    <button id="tileBlueBtn">Blue Base</button>
+    <button id="undoBtn">Undo</button>
+    <button id="exportBtn">Export</button>
+    <button id="renderBtn">Render</button>
+  </div>
+  <table id="grid"></table>
+  <textarea id="exportOutput" readonly></textarea>
+  <script id="scriptEditor">
+    const grid = document.getElementById('grid');
+    const buttons = document.querySelectorAll('#toolbar button');
+    const tileWallBtn = document.getElementById('tileWallBtn');
+    const tileWalkableBtn = document.getElementById('tileWalkableBtn');
+    const tileRedBtn = document.getElementById('tileRedBtn');
+    const tileBlueBtn = document.getElementById('tileBlueBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const renderBtn = document.getElementById('renderBtn');
+    const exportOutput = document.getElementById('exportOutput');
+    let current = 'wall';
+    let painting = false;
+    const history = [];
+
+    function setActive(button) {
+      buttons.forEach(b => b.classList.remove('active'));
+      button.classList.add('active');
+    }
+    tileWallBtn.addEventListener('click', () => { current = 'wall'; setActive(tileWallBtn); });
+    tileWalkableBtn.addEventListener('click', () => { current = 'walkable'; setActive(tileWalkableBtn); });
+    tileRedBtn.addEventListener('click', () => { current = 'red'; setActive(tileRedBtn); });
+    tileBlueBtn.addEventListener('click', () => { current = 'blue'; setActive(tileBlueBtn); });
+    setActive(tileWallBtn);
+
+    const colorMap = { wall: '#555', walkable: '#2a2a2a', red: '#8b0000', blue: '#00008b' };
+
+    function paint(cell) {
+      history.push({ cell, prevClass: cell.className, prevText: cell.textContent });
+      switch (current) {
+        case 'wall': cell.className = 'wall'; cell.textContent = ''; break;
+        case 'walkable': cell.className = 'walkable'; cell.textContent = ''; break;
+        case 'red': cell.className = 'redBase'; cell.textContent = '1'; break;
+        case 'blue': cell.className = 'blueBase'; cell.textContent = '2'; break;
+      }
+      for (let i = 0; i < 6; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.style.background = colorMap[current];
+        p.style.animationDelay = (Math.random() * 0.2) + 's';
+        cell.appendChild(p);
+        p.addEventListener('animationend', () => p.remove());
+      }
+    }
+
+    for (let r = 0; r < 40; r++) {
+      const row = grid.insertRow();
+      for (let c = 0; c < 40; c++) {
+        const cell = row.insertCell();
+        cell.id = `cell-${r}-${c}`;
+        cell.className = (r === 0 || r === 39 || c === 0 || c === 39) ? 'wall' : 'walkable';
+        cell.addEventListener('mousedown', () => { painting = true; paint(cell); });
+        cell.addEventListener('mouseover', () => { if (painting) paint(cell); });
+        cell.addEventListener('dragstart', e => e.preventDefault());
+      }
+    }
+    document.addEventListener('mouseup', () => painting = false);
+
+    undoBtn.addEventListener('click', () => {
+      const last = history.pop();
+      if (last) {
+        last.cell.className = last.prevClass;
+        last.cell.textContent = last.prevText;
+      }
+    });
+
+    // Ctrl+Z for undo
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        undoBtn.click();
+      }
+    });
+
+    exportBtn.addEventListener('click', () => {
+      let out = '';
+      for (let r = 0; r < 40; r++) {
+        for (let c = 0; c < 40; c++) {
+          const cell = document.getElementById(`cell-${r}-${c}`);
+          if (cell.className === 'wall') out += 'f';
+          else if (cell.textContent === '1') out += '1';
+          else if (cell.textContent === '2') out += '2';
+          else out += '_';
+        }
+        out += '\n';
+      }
+      exportOutput.value = out;
+    });
+
+    renderBtn.addEventListener('click', () => {
+      const cellSize = 16;
+      const canvas = document.createElement('canvas');
+      canvas.width = 40 * cellSize;
+      canvas.height = 40 * cellSize;
+      const ctx = canvas.getContext('2d');
+      for (let r = 0; r < 40; r++) {
+        for (let c = 0; c < 40; c++) {
+          const cell = document.getElementById(`cell-${r}-${c}`);
+          const bg = window.getComputedStyle(cell).backgroundColor;
+          ctx.fillStyle = bg;
+          ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+        }
+      }
+      canvas.toBlob(blob => {
+        const item = new ClipboardItem({ 'image/png': blob });
+        navigator.clipboard.write([item]);
+        alert('Map screenshot copied to clipboard!');
+      });
+    });
+  </script>
+</body>
+</html>
